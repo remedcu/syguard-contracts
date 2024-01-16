@@ -1,0 +1,39 @@
+include:
+  - project: "sygnum/infra/templates"
+    ref: v4.25.0
+    file: "/gitlab/.ethereum-contracts-ci-template.yml"
+
+variables:
+  FRAMEWORK: hardhat
+
+stages:
+  - solidity-build
+  - solidity-tests
+  - deploy
+  - upgrade
+  - npm-publish
+
+solidity-build:
+  extends: .solidity-build
+
+solidity-test:
+  extends: .solidity-test
+
+solidity-coverage:
+  extends: .solidity-coverage
+
+code-lint:
+  extends: .code-lint
+
+solidity-mythril:
+  extends: .solidity-mythril
+
+solidity-securify:
+  extends: .solidity-securify
+
+solidity-slither:
+  extends: .solidity-slither
+
+npm-publish:
+  extends: .npm-publish
+  when: manual
