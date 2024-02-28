@@ -2,14 +2,7 @@
 pragma solidity ^0.8.18;
 
 import {Module, Enum} from "@gnosis.pm/zodiac/contracts/core/Module.sol";
-
-interface IOwnerManager {
-    function swapOwner(
-        address prevOwner,
-        address oldOwner,
-        address newOwner
-    ) external;
-}
+import {IOwnerManager} from "./interface/IOwnerManager.sol";
 
 contract SwapOwnerModule is Module {
     event SwapOwnerSetup(
@@ -32,7 +25,6 @@ contract SwapOwnerModule is Module {
     /// @notice Public setup function to allow deployment via factory / proxy pattern
     /// @param initializeParams ABI encoded parameters (see constructor)
     function setUp(bytes memory initializeParams) public override initializer {
-        __Ownable_init(msg.sender);
         (address _target, address _avatar, address _owner) = abi.decode(
             initializeParams,
             (address, address, address)
@@ -40,9 +32,9 @@ contract SwapOwnerModule is Module {
         require(_avatar != address(0), "Avatar can not be zero address");
         require(_target != address(0), "Target can not be zero address");
         require(_owner != address(0), "Owner can not be zero address");
+        __Ownable_init(_owner);
         avatar = _avatar;
         target = _target;
-        _transferOwnership(_owner);
 
         emit SwapOwnerSetup(msg.sender, _target, _avatar, _owner);
         emit AvatarSet(address(0), _avatar);
