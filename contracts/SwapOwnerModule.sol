@@ -3,6 +3,7 @@ pragma solidity ^0.8.18;
 
 import {Module, Enum} from "@gnosis.pm/zodiac/contracts/core/Module.sol";
 import {IOwnerManager} from "./interface/IOwnerManager.sol";
+import {IDelay} from "./interface/IDelay.sol";
 
 contract SwapOwnerModule is Module {
     event SwapOwnerSetup(
@@ -11,8 +12,9 @@ contract SwapOwnerModule is Module {
         address indexed avatar,
         address target
     );
-
     event SwapOwner(address indexed oldOwner, address indexed newOwner);
+    mapping(uint256 => uint256) public swapNonceToDelayNonce;
+    uint256 public txNonce;
 
     /// @param _avatar Address of the avatar (e.g. a Gnosis Safe) Avatars must expose an interface like IAvatar.sol.
     /// @param _target Address of the contract that will call execTransactionFromModule function (Delay modifier)
@@ -55,10 +57,37 @@ contract SwapOwnerModule is Module {
         address oldOwner,
         address newOwner
     ) external onlyOwner {
+        IDelay delay = IDelay(target);
+        uint256 delayTxNonce = delay.txNonce();
+        uint256 txCooldown = delay.txCooldown();
+        uint256 txExpiration = delay.txExpiration();
+        uint256 lastTxNonce = swapNonceToDelayNonce[
+            txNonce > 0 ? txNonce - 1 : 0
+        ];
+        uint256 lastTxCreatedAt = delay.txCreatedAt(lastTxNonce);
+        if (lastTxNonce >= delayTxNonce && lastTxCreatedAt > 0) {
+            require(
+                block.timestamp - lastTxCreatedAt > txCooldown,
+                "Cooldown period has not passed"
+            );
+            if (txExpiration > 0) {
+                require(
+                    lastTxCreatedAt + txCooldown + txExpiration <
+                        block.timestamp,
+                    "Transaction has not expired"
+                );
+            } else {
+                revert("A recovery is pending execution");
+            }
+        }
+        uint256 delayQueueNonce = delay.queueNonce();
         require(
             _swapOwner(prevOwner, oldOwner, newOwner),
             "Module transaction failed"
         );
+
+        swapNonceToDelayNonce[txNonce] = delayQueueNonce;
+        txNonce++;
         emit SwapOwner(oldOwner, newOwner);
     }
 
@@ -69,7 +98,8 @@ contract SwapOwnerModule is Module {
     ) internal returns (bool) {
         return
             exec(
-                target,
+                // avatar, in our case the safe will execute the below function
+                avatar,
                 0,
                 abi.encodeCall(
                     IOwnerManager.swapOwner,

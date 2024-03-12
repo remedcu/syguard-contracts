@@ -1,4 +1,4 @@
-import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
+import { loadFixture, time } from "@nomicfoundation/hardhat-network-helpers";
 import { expect } from "chai";
 import hre from "hardhat";
 
@@ -13,9 +13,10 @@ const FirstAddress = "0x0000000000000000000000000000000000000001";
 
 describe("DelayModifier", async () => {
   const cooldown = 180;
-  const expiration = 180 * 1000;
+  const expiration = 180;
 
   async function setup() {
+    //[admin, owner, prevOwner, oldOwner, newOwner]
     const [admin] = await hre.ethers.getSigners();
 
     const Avatar = await hre.ethers.getContractFactory(contracts.avatar);
@@ -40,7 +41,7 @@ describe("DelayModifier", async () => {
       admin.address
     );
 
-    return { avatar, modifier, module };
+    return { avatar, modifier, module, admin };
   }
 
   describe("setUp()", async () => {
@@ -123,6 +124,139 @@ describe("DelayModifier", async () => {
       )
         .to.emit(module, "SwapOwner")
         .withArgs(user1.address, user2.address);
+    });
+    it("should succeed when queuing 2 transaction after waiting one cooldown period", async function () {
+      const { module, modifier, admin } = await loadFixture(setup);
+
+      const oldOwnerAddress = "0xa234b71A23699783462D739440a5Af46DddafFc5";
+      const newUser = "0xC7a622A096405C57af295b63c155b031c2A1822B";
+
+      await modifier.enableModule(module.address);
+
+      await expect(
+        module
+          .connect(admin)
+          .startRecovery(oldOwnerAddress, oldOwnerAddress, newUser)
+      )
+        .to.emit(module, "SwapOwner")
+        .withArgs(oldOwnerAddress, newUser);
+
+      await time.increase(cooldown + expiration + 1);
+
+      await expect(
+        module
+          .connect(admin)
+          .startRecovery(oldOwnerAddress, oldOwnerAddress, newUser)
+      )
+        .to.emit(module, "SwapOwner")
+        .withArgs(oldOwnerAddress, newUser);
+    });
+
+    it("should revert if a transaction is we try to queue more than once per cooldown period", async function () {
+      const { module, modifier, admin } = await loadFixture(setup);
+
+      const oldOwnerAddress = "0xa234b71A23699783462D739440a5Af46DddafFc5";
+      const newUser = "0xC7a622A096405C57af295b63c155b031c2A1822B";
+
+      await modifier.enableModule(module.address);
+
+      await expect(
+        module.startRecovery(oldOwnerAddress, oldOwnerAddress, newUser)
+      )
+        .to.emit(module, "SwapOwner")
+        .withArgs(oldOwnerAddress, newUser);
+      await expect(
+        module.startRecovery(oldOwnerAddress, oldOwnerAddress, newUser)
+      ).to.be.revertedWith("Cooldown period has not passed");
+    });
+    it("should revert if a transaction if transaction is pending (cooldown passed, no expiration)", async function () {
+      const { module, modifier, admin } = await loadFixture(setup);
+
+      const oldOwnerAddress = "0xa234b71A23699783462D739440a5Af46DddafFc5";
+      const newUser = "0xC7a622A096405C57af295b63c155b031c2A1822B";
+
+      await modifier.enableModule(module.address);
+      await modifier.setTxExpiration(0);
+
+      await expect(
+        module.startRecovery(oldOwnerAddress, oldOwnerAddress, newUser)
+      )
+        .to.emit(module, "SwapOwner")
+        .withArgs(oldOwnerAddress, newUser);
+
+      await time.increase(cooldown + 1);
+
+      await expect(
+        module.startRecovery(oldOwnerAddress, oldOwnerAddress, newUser)
+      ).to.be.revertedWith("A recovery is pending execution");
+    });
+    it("should revert if a transaction if transaction is pending (cooldown passed, with expiration)", async function () {
+      const { module, modifier, admin } = await loadFixture(setup);
+
+      const oldOwnerAddress = "0xa234b71A23699783462D739440a5Af46DddafFc5";
+      const newUser = "0xC7a622A096405C57af295b63c155b031c2A1822B";
+
+      await modifier.enableModule(module.address);
+
+      await expect(
+        module.startRecovery(oldOwnerAddress, oldOwnerAddress, newUser)
+      )
+        .to.emit(module, "SwapOwner")
+        .withArgs(oldOwnerAddress, newUser);
+
+      await time.increase(cooldown + 1);
+
+      await expect(
+        module.startRecovery(oldOwnerAddress, oldOwnerAddress, newUser)
+      ).to.be.revertedWith("Transaction has not expired");
+    });
+    it("should succeed if a transaction if transaction is pending (cooldown passed, with expiration)", async function () {
+      const { module, modifier, admin } = await loadFixture(setup);
+
+      const oldOwnerAddress = "0xa234b71A23699783462D739440a5Af46DddafFc5";
+      const newUser = "0xC7a622A096405C57af295b63c155b031c2A1822B";
+
+      await modifier.enableModule(module.address);
+
+      await expect(
+        module.startRecovery(oldOwnerAddress, oldOwnerAddress, newUser)
+      )
+        .to.emit(module, "SwapOwner")
+        .withArgs(oldOwnerAddress, newUser);
+
+      await time.increase(cooldown + expiration);
+
+      await expect(
+        module.startRecovery(oldOwnerAddress, oldOwnerAddress, newUser)
+      )
+        .to.emit(module, "SwapOwner")
+        .withArgs(oldOwnerAddress, newUser);
+    });
+
+    it("should succeed if a transaction if transaction is pending (cooldown passed, no expiration)", async function () {
+      const { module, modifier, admin } = await loadFixture(setup);
+
+      const oldOwnerAddress = "0xa234b71A23699783462D739440a5Af46DddafFc5";
+      const newUser = "0xC7a622A096405C57af295b63c155b031c2A1822B";
+
+      await modifier.enableModule(module.address);
+      await modifier.setTxExpiration(0);
+
+      await expect(
+        module.startRecovery(oldOwnerAddress, oldOwnerAddress, newUser)
+      )
+        .to.emit(module, "SwapOwner")
+        .withArgs(oldOwnerAddress, newUser);
+
+      await time.increase(cooldown + expiration);
+      await modifier.setTxNonce(1);
+
+
+      await expect(
+        module.startRecovery(oldOwnerAddress, oldOwnerAddress, newUser)
+      )
+        .to.emit(module, "SwapOwner")
+        .withArgs(oldOwnerAddress, newUser);
     });
   });
 });

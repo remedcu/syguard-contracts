@@ -3,10 +3,10 @@ import SafeApiKit from "@safe-global/api-kit";
 import Safe, { EthersAdapter } from "@safe-global/protocol-kit";
 import { deployModuleTx, enableModuleTx, proposeTransaction } from "./utils";
 
-const masterCopyDelay = "0xd54895B1121A2eE3f37b502F507631FA1331BED6";
-const masterCopySwap = "0x681DA7CbB7Ade11CA1E51C4CB08300CafD749673";
-const sygnumAccount = "0x928cCB4BC9Ec337591247354FB146541b4f9c931";
-const clientAccount = "0xD85f64E9DDB888C7c65F12a4409E3e1148189b3c";
+const masterCopyDelay = "0xE82814727799742403a4c41bEc96996fCE6D2719";
+const masterCopySwap = "0xc31161A7f7588D80782272A974fA8676D40299d1";
+const sygnumAccount = "0x9cfD7D6e751568761C1E698E6148ed899a0d358d";
+const clientAccount = "0xf2aA5a5EDB8E1e384Ec8988F0a32772af1765eE1";
 
 async function main() {
   const deployer = (await hre.ethers.getSigners())[0];
@@ -20,7 +20,7 @@ async function main() {
   });
 
   const safeApiKit = new SafeApiKit({
-    txServiceUrl: "https://safe-transaction-goerli.safe.global/",
+    txServiceUrl: "https://safe-transaction-sepolia.safe.global/",
     ethAdapter,
   });
 
@@ -36,7 +36,7 @@ async function main() {
       ["address", "address", "address", "uint256", "uint256"],
       [clientAccount, clientAccount, clientAccount, 0, 0],
       masterCopyDelay,
-      "0x489498",
+      hre.ethers.utils.hexlify(hre.ethers.utils.randomBytes(4)),
       hre
     );
   const { TxDeploy: deploySwapTx, moduleAddress: swapAddress } =
@@ -45,7 +45,7 @@ async function main() {
       ["address", "address", "address"],
       [delayAddress, clientAccount, sygnumAccount],
       masterCopySwap,
-      "0x489498",
+      hre.ethers.utils.hexlify(hre.ethers.utils.randomBytes(4)),
       hre
     );
   const enableDelayTx = await enableModuleTx(clientAccount, delayAddress, hre);

@@ -7,6 +7,8 @@ import {
 } from "@safe-global/safe-core-sdk-types";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 
+const FirstAddress = "0x0000000000000000000000000000000000000001";
+
 const buildTransaction = (
   iface: Interface,
   to: string,
@@ -125,4 +127,53 @@ export async function getModuleDeploymentAddress(
     salt
   );
   return deploymentAddress;
+}
+
+export async function startRecovery(
+  oldAddress: string,
+  newAddress: string,
+  swapAddress: string,
+  hre: HardhatRuntimeEnvironment
+) {
+  const functionName = "startRecovery";
+  const args = [FirstAddress, oldAddress, newAddress];
+  const module = await hre.artifacts.readArtifact("SwapOwnerModule");
+  const iface = new hre.ethers.utils.Interface((await module).abi);
+  const moduleOwner = await hre.artifacts.readArtifact("IOwnerManager");
+  const ifaceOwner = new hre.ethers.utils.Interface((await moduleOwner).abi);
+  const encoded = ifaceOwner.encodeFunctionData("swapOwner", args);
+
+  const Tx = buildTransaction(iface, swapAddress, functionName, args);
+  return { Tx, encoded };
+}
+
+export async function executeRecovery(
+  clientSafe: string,
+  data: string,
+  delayAddress: string,
+  hre: HardhatRuntimeEnvironment
+) {
+  const functionName = "executeNextTx";
+  const args = [clientSafe, 0, data, 0];
+  const module = hre.artifacts.readArtifact("Delay");
+  const iface = new hre.ethers.utils.Interface((await module).abi);
+
+  const Tx = buildTransaction(iface, delayAddress, functionName, args);
+  return Tx;
+}
+
+export async function executeTransaction(
+  oldAddress: string,
+  newAddress: string,
+  swapAddress: string,
+  hre: HardhatRuntimeEnvironment
+) {
+  const functionName = "startRecovery";
+  const args = [FirstAddress, oldAddress, newAddress];
+  const module = await hre.artifacts.readArtifact("SwapOwnerModule");
+  const iface = new hre.ethers.utils.Interface((await module).abi);
+  iface.encodeFunctionData(functionName, args);
+
+  const Tx = buildTransaction(iface, swapAddress, functionName, args);
+  return Tx;
 }
