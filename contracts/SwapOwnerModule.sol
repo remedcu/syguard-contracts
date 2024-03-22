@@ -13,8 +13,8 @@ contract SwapOwnerModule is Module {
         address target
     );
     event SwapOwner(address indexed oldOwner, address indexed newOwner);
-    mapping(uint256 => uint256) public swapNonceToDelayNonce;
-    uint256 public txNonce;
+    mapping(uint256 => uint256) public swapNonceToDelayQueueNonce;
+    uint256 public swapTxNonce;
 
     /// @param _avatar Address of the avatar (e.g. a Gnosis Safe) Avatars must expose an interface like IAvatar.sol.
     /// @param _target Address of the contract that will call execTransactionFromModule function (Delay modifier)
@@ -58,19 +58,25 @@ contract SwapOwnerModule is Module {
         address newOwner
     ) external onlyOwner {
         IDelay delay = IDelay(target);
+        // Current executable nonce from delay
         uint256 delayTxNonce = delay.txNonce();
         uint256 txCooldown = delay.txCooldown();
         uint256 txExpiration = delay.txExpiration();
-        uint256 lastTxNonce = swapNonceToDelayNonce[
-            txNonce > 0 ? txNonce - 1 : 0
+        // Nonce given by the delay to the last recovery queued
+        uint256 lastTxQueueNonce = swapNonceToDelayQueueNonce[
+            swapTxNonce > 0 ? swapTxNonce - 1 : 0
         ];
-        uint256 lastTxCreatedAt = delay.txCreatedAt(lastTxNonce);
-        if (lastTxNonce >= delayTxNonce && lastTxCreatedAt > 0) {
+        //Check if transaction has not been executed and if a tx has ever been queued
+        if (lastTxQueueNonce >= delayTxNonce && swapTxNonce > 0) {
+            uint256 lastTxCreatedAt = delay.txCreatedAt(lastTxQueueNonce);
+            //Require the cooldown period to have passed
             require(
                 block.timestamp - lastTxCreatedAt > txCooldown,
                 "Cooldown period has not passed"
             );
+            //Check if transaction has an expiration
             if (txExpiration > 0) {
+                //Require the transaction to be expired
                 require(
                     lastTxCreatedAt + txCooldown + txExpiration <
                         block.timestamp,
@@ -80,14 +86,15 @@ contract SwapOwnerModule is Module {
                 revert("A recovery is pending execution");
             }
         }
+        // Nonce given by the delay to the current recovery
         uint256 delayQueueNonce = delay.queueNonce();
         require(
             _swapOwner(prevOwner, oldOwner, newOwner),
             "Module transaction failed"
         );
-
-        swapNonceToDelayNonce[txNonce] = delayQueueNonce;
-        txNonce++;
+        //Map the swapNonce to the delay nonce to be able to find the transaction in the delay contract
+        swapNonceToDelayQueueNonce[swapTxNonce] = delayQueueNonce;
+        swapTxNonce++;
         emit SwapOwner(oldOwner, newOwner);
     }
 

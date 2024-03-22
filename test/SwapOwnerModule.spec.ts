@@ -114,7 +114,6 @@ describe("DelayModifier", async () => {
         module.startRecovery(FirstAddress, user1.address, user2.address)
       ).to.not.reverted;
     });
-
     it("should emit event in case of successful recovery queuing", async () => {
       const [user1, user2] = await hre.ethers.getSigners();
       const { module, modifier } = await loadFixture(setup);
@@ -125,7 +124,7 @@ describe("DelayModifier", async () => {
         .to.emit(module, "SwapOwner")
         .withArgs(user1.address, user2.address);
     });
-    it("should succeed when queuing 2 transaction after waiting one cooldown period", async function () {
+    it("should SUCCEED when queuing 2 transaction after waiting one cooldown period", async function () {
       const { module, modifier, admin } = await loadFixture(setup);
 
       const oldOwnerAddress = "0xa234b71A23699783462D739440a5Af46DddafFc5";
@@ -151,8 +150,7 @@ describe("DelayModifier", async () => {
         .to.emit(module, "SwapOwner")
         .withArgs(oldOwnerAddress, newUser);
     });
-
-    it("should revert if a transaction is we try to queue more than once per cooldown period", async function () {
+    it("should REVERT if a transaction is we try to queue more than once per cooldown period", async function () {
       const { module, modifier, admin } = await loadFixture(setup);
 
       const oldOwnerAddress = "0xa234b71A23699783462D739440a5Af46DddafFc5";
@@ -169,7 +167,7 @@ describe("DelayModifier", async () => {
         module.startRecovery(oldOwnerAddress, oldOwnerAddress, newUser)
       ).to.be.revertedWith("Cooldown period has not passed");
     });
-    it("should revert if a transaction if transaction is pending (cooldown passed, no expiration)", async function () {
+    it("should REVERT if a transaction if transaction is pending (cooldown passed, no expiration)", async function () {
       const { module, modifier, admin } = await loadFixture(setup);
 
       const oldOwnerAddress = "0xa234b71A23699783462D739440a5Af46DddafFc5";
@@ -190,7 +188,7 @@ describe("DelayModifier", async () => {
         module.startRecovery(oldOwnerAddress, oldOwnerAddress, newUser)
       ).to.be.revertedWith("A recovery is pending execution");
     });
-    it("should revert if a transaction if transaction is pending (cooldown passed, with expiration)", async function () {
+    it("should REVERT if a transaction if transaction is pending cooldown passed not expired (cooldown passed, with expiration)", async function () {
       const { module, modifier, admin } = await loadFixture(setup);
 
       const oldOwnerAddress = "0xa234b71A23699783462D739440a5Af46DddafFc5";
@@ -210,7 +208,7 @@ describe("DelayModifier", async () => {
         module.startRecovery(oldOwnerAddress, oldOwnerAddress, newUser)
       ).to.be.revertedWith("Transaction has not expired");
     });
-    it("should succeed if a transaction if transaction is pending (cooldown passed, with expiration)", async function () {
+    it("should SUCCEED if a transaction is pending and expired (cooldown passed, with expiration)", async function () {
       const { module, modifier, admin } = await loadFixture(setup);
 
       const oldOwnerAddress = "0xa234b71A23699783462D739440a5Af46DddafFc5";
@@ -232,8 +230,7 @@ describe("DelayModifier", async () => {
         .to.emit(module, "SwapOwner")
         .withArgs(oldOwnerAddress, newUser);
     });
-
-    it("should succeed if a transaction if transaction is pending (cooldown passed, no expiration)", async function () {
+    it("should SUCCEED if transaction previous is executed", async function () {
       const { module, modifier, admin } = await loadFixture(setup);
 
       const oldOwnerAddress = "0xa234b71A23699783462D739440a5Af46DddafFc5";
@@ -248,9 +245,28 @@ describe("DelayModifier", async () => {
         .to.emit(module, "SwapOwner")
         .withArgs(oldOwnerAddress, newUser);
 
-      await time.increase(cooldown + expiration);
+      await time.increase(cooldown + expiration + 1);
       await modifier.setTxNonce(1);
 
+      await expect(
+        module.startRecovery(oldOwnerAddress, oldOwnerAddress, newUser)
+      )
+        .to.emit(module, "SwapOwner")
+        .withArgs(oldOwnerAddress, newUser);
+    });
+
+    it("should SUCCEED to queue the first transaction even if delay has pending transaction from another module", async function () {
+      const { module, modifier, admin } = await loadFixture(setup);
+
+      const oldOwnerAddress = "0xa234b71A23699783462D739440a5Af46DddafFc5";
+      const newUser = "0xC7a622A096405C57af295b63c155b031c2A1822B";
+
+      await modifier.enableModule(module.address);
+      await modifier.enableModule(admin.address);
+      await modifier.setTxExpiration(0);
+      await modifier
+        .connect(admin)
+        .execTransactionFromModule(module.address, 0, "0x", 0);
 
       await expect(
         module.startRecovery(oldOwnerAddress, oldOwnerAddress, newUser)
