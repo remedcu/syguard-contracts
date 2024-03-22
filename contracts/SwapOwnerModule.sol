@@ -58,16 +58,32 @@ contract SwapOwnerModule is Module {
         address newOwner
     ) external onlyOwner {
         IDelay delay = IDelay(target);
+        // Nonce given by the delay to the current recovery
+        uint256 delayQueueNonce = delay.queueNonce();
+
+        if (swapTxNonce > 0) {
+            _checkLastQueuedTx(delay);
+        }
+
+        require(
+            _swapOwner(prevOwner, oldOwner, newOwner),
+            "Module transaction failed"
+        );
+        //Map the swapNonce to the delay nonce to be able to find the transaction in the delay contract
+        swapNonceToDelayQueueNonce[swapTxNonce] = delayQueueNonce;
+        swapTxNonce++;
+        emit SwapOwner(oldOwner, newOwner);
+    }
+
+    function _checkLastQueuedTx(IDelay delay) internal view {
         // Current executable nonce from delay
         uint256 delayTxNonce = delay.txNonce();
         uint256 txCooldown = delay.txCooldown();
         uint256 txExpiration = delay.txExpiration();
         // Nonce given by the delay to the last recovery queued
-        uint256 lastTxQueueNonce = swapNonceToDelayQueueNonce[
-            swapTxNonce > 0 ? swapTxNonce - 1 : 0
-        ];
+        uint256 lastTxQueueNonce = swapNonceToDelayQueueNonce[swapTxNonce - 1];
         //Check if transaction has not been executed and if a tx has ever been queued
-        if (lastTxQueueNonce >= delayTxNonce && swapTxNonce > 0) {
+        if (lastTxQueueNonce >= delayTxNonce) {
             uint256 lastTxCreatedAt = delay.txCreatedAt(lastTxQueueNonce);
             //Require the cooldown period to have passed
             require(
@@ -86,16 +102,6 @@ contract SwapOwnerModule is Module {
                 revert("A recovery is pending execution");
             }
         }
-        // Nonce given by the delay to the current recovery
-        uint256 delayQueueNonce = delay.queueNonce();
-        require(
-            _swapOwner(prevOwner, oldOwner, newOwner),
-            "Module transaction failed"
-        );
-        //Map the swapNonce to the delay nonce to be able to find the transaction in the delay contract
-        swapNonceToDelayQueueNonce[swapTxNonce] = delayQueueNonce;
-        swapTxNonce++;
-        emit SwapOwner(oldOwner, newOwner);
     }
 
     function _swapOwner(
