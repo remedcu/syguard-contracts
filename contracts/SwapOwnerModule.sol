@@ -38,7 +38,7 @@ contract SwapOwnerModule is Module {
         avatar = _avatar;
         target = _target;
 
-        emit SwapOwnerSetup(msg.sender, _target, _avatar, _owner);
+        emit SwapOwnerSetup(msg.sender, _owner, _avatar, _target);
         emit AvatarSet(address(0), _avatar);
         emit TargetSet(address(0), _target);
     }
